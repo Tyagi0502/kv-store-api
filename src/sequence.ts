@@ -40,7 +40,7 @@ export class MySequence implements SequenceHandler {
           route: path,
           statusCode: response.statusCode,
         },
-        (endTime - startTime) * 1000,
+        endTime - startTime,
       );
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
@@ -53,7 +53,7 @@ export class MySequence implements SequenceHandler {
           route: path,
           statusCode: response.statusCode,
         },
-        (endTime - startTime) * 1000,
+        endTime - startTime,
       );
     }
   }

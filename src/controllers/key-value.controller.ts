@@ -1,4 +1,3 @@
-import {repository} from '@loopback/repository';
 import {
   post,
   param,
@@ -8,20 +7,17 @@ import {
   response,
   HttpErrors,
 } from '@loopback/rest';
-import {StoredValue, KeyValuePair} from '../models';
-import {StoredValueRepository} from '../repositories';
+import {numberOfKeysInDatabase} from '../metrics';
+import {KeyValuePair} from '../models';
 
 export class KeyValueController {
-  constructor(
-    @repository(StoredValueRepository)
-    public storedValueRepository: StoredValueRepository,
-  ) {}
+  constructor() {}
 
   @post('/set')
   @response(204, {
     description: 'Value set successfully',
   })
-  async create(
+  async set(
     @requestBody({
       content: {
         'application/json': {
@@ -31,10 +27,8 @@ export class KeyValueController {
     })
     keyValue: KeyValuePair,
   ): Promise<void> {
-    return this.storedValueRepository.set(
-      keyValue.key,
-      new StoredValue({value: keyValue.value}),
-    );
+    kvPairs.set(keyValue.key, keyValue.value);
+    numberOfKeysInDatabase.set(kvPairs.size);
   }
 
   @get('/get/{key}')
@@ -43,9 +37,10 @@ export class KeyValueController {
     content: {'text/plain': {schema: {type: 'string'}}},
   })
   async find(@param.path.string('key') key: string): Promise<string> {
-    const result = await this.storedValueRepository.get(key);
-    if (result) {
-      return result.value;
+    const value = kvPairs.get(key);
+
+    if (value) {
+      return value;
     } else {
       throw new HttpErrors.NotFound(`No value found for key --> ${key}`);
     }
@@ -67,29 +62,45 @@ export class KeyValueController {
     @param.query.string('prefix') prefix?: string,
     @param.query.string('suffix') suffix?: string,
   ): Promise<string[]> {
-    let result: AsyncIterable<string>;
+    const keys = kvPairs.keys();
+
+    let result: string[];
     if (prefix && !suffix) {
-      result = this.storedValueRepository.keys({
-        match: `${prefix}*`,
-      });
+      result = [...filterPrefix(keys, prefix)];
     } else if (suffix && !prefix) {
-      result = this.storedValueRepository.keys({
-        match: `*${suffix}`,
-      });
+      result = [...filterSuffix(keys, suffix)];
     } else if (prefix && suffix) {
-      result = this.storedValueRepository.keys({
-        match: `${prefix}*${suffix}`,
-      });
+      result = [...filterPrefixSuffix(keys, prefix, suffix)];
     } else {
       throw new HttpErrors.BadRequest(
         'No prefix or suffix provided to search for.',
       );
     }
-
-    const res = [];
-    for await (const key of result) {
-      res.push(key);
-    }
-    return res;
+    return result;
   }
+}
+
+const kvPairs = new Map<string, string>();
+
+function* filterPrefix(
+  iterable: IterableIterator<string>,
+  prefix: string,
+): IterableIterator<string> {
+  for (const item of iterable) if (item.startsWith(prefix)) yield item;
+}
+
+function* filterSuffix(
+  iterable: IterableIterator<string>,
+  suffix: string,
+): IterableIterator<string> {
+  for (const item of iterable) if (item.endsWith(suffix)) yield item;
+}
+
+function* filterPrefixSuffix(
+  iterable: IterableIterator<string>,
+  prefix: string,
+  suffix: string,
+): IterableIterator<string> {
+  for (const item of iterable)
+    if (item.startsWith(prefix) && item.endsWith(suffix)) yield item;
 }
