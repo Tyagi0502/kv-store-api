@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+  name: kv-store
+  namespace: kv
+spec:
+  rules:
+    - http:
+        paths:
+          - pathType: ImplementationSpecific
+            backend:
+              service:
+                name: kv-store
+                port:
+                  number: 80
+      host: kv-store.com  ### Replace with actual host
+  tls:
+    - hosts:
+        - kv-store.com  ### Replace with actual host
+      secretName: "tls-kv-store"  ### Replace with actual TLS secret name
